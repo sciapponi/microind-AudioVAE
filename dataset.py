@@ -5,8 +5,8 @@
 import ast, os
 from torch.nn import functional as F
 from torch.utils.data import Dataset
-import soundfile
 import torchaudio
+import torch
 
 class AudioMNIST(Dataset):
 
@@ -30,7 +30,7 @@ class AudioMNIST(Dataset):
         pass
 
     def __len__(self):
-        return len(self.y)
+        return len(self.wav_file_paths)
 
     def __getitem__(self, index)-> any:
         wav_path=self.wav_file_paths[index]
@@ -44,7 +44,7 @@ class AudioMNIST(Dataset):
 
         zeros = self.max_len_audio - waveform.shape[1]
         waveform = F.pad(waveform, (0, zeros))
-        return waveform, sr, label, speaker
+        return waveform, int(label), sr, speaker
 
     def get_speaker_metadata(self, speaker):
         return self.meta_dict[speaker]

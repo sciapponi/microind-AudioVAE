@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-import torch.functional as F
+import torch.nn.functional as F
 from typing import *
 
 class Encoder(nn.Module):
@@ -11,9 +11,12 @@ class Encoder(nn.Module):
                  latent_dim,
                  hidden_dims: List = None,
                  spec_time: int = 64,
-                 spec_bins: int = 64) ->None:
-        
-        in_channels = 1 # spectrogram input channels
+                 spec_bins: int = 64,
+                 in_channels = 1 # spectrogram input channels
+                 ) ->None:
+        super(Encoder, self).__init__()
+
+        self.num_classes = num_classes
         self.spec_time = spec_time
         self.spec_bins = spec_bins
 
@@ -22,8 +25,8 @@ class Encoder(nn.Module):
         self.embed_data = nn.Conv2d(in_channels, in_channels, kernel_size=1)
 
         
-        if hidden_dims is None:
-            hidden_dims = [32, 64, 128, 256, 512]
+        # if hidden_dims is None:
+        #     hidden_dims = [32, 64, 128, 256, 512]
 
         encoder_modules = []
 
@@ -51,9 +54,11 @@ class Encoder(nn.Module):
         return eps * std + mu
     
     def encode(self, input: Tensor) -> List[Tensor]:
+        print(f"input: {input.shape}")
         result = self.encoder(input)
+        print(f"result: {result.shape}")
         result = torch.flatten(result, start_dim=1)
-
+        print(f"result: {result.shape}")
         # Split the result into mu and var components
         # of the latent Gaussian distribution
         mu = self.fc_mu(result)
@@ -62,13 +67,15 @@ class Encoder(nn.Module):
         return [mu, log_var]
     
     def forward(self, batch):
-        y = batch[1].float()
+        y = F.one_hot(batch[1].long(), self.num_classes).float()
         embedded_class = self.embed_class(y)
-        embedded_class = embedded_class.view(-1, self.spec_time, self.spec_bins).unsqueeze(1) # check wheter to swap time and bins
+        embedded_class = embedded_class.view(-1,  self.spec_time, self.spec_bins).unsqueeze(1) # check wheter to swap time and bins
         
-        embedded_input = embedded_input(batch[0])
-        
-        mu, log_var = self.encode(batch[0])
+        print(embedded_class.shape)
+        embedded_input = self.embed_data(batch[0])
+        print(embedded_input.shape)
+        x = torch.cat([embedded_input, embedded_class], dim = 1)
+        mu, log_var = self.encode(x)
 
         z = self.reparameterize(mu, log_var)
         
