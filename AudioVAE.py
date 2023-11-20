@@ -45,8 +45,8 @@ class Encoder(nn.Module):
         
         #Encoder unpacking, mu and var declaration
         self.encoder = nn.Sequential(*encoder_modules)
-        self.fc_mu = nn.Linear(hidden_dims[-1]*4, latent_dim)
-        self.fc_var = nn.Linear(hidden_dims[-1]*4, latent_dim)
+        self.fc_mu = nn.Linear(hidden_dims[-1]*19*8, latent_dim) # < depends on downsampling
+        self.fc_var = nn.Linear(hidden_dims[-1]*19*8, latent_dim)
 
     def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:
         std = torch.exp(0.5 * logvar)
@@ -73,6 +73,7 @@ class Encoder(nn.Module):
         
         print(embedded_class.shape)
         embedded_input = self.embed_data(batch[0])
+
         print(embedded_input.shape)
         x = torch.cat([embedded_input, embedded_class], dim = 1)
         mu, log_var = self.encode(x)
