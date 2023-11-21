@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from typing import *
 
 class Encoder(nn.Module):
-
     def __init__(self,
                  num_classes,
                  latent_dim,
@@ -24,10 +23,6 @@ class Encoder(nn.Module):
         self.embed_class = nn.Linear(num_classes, spec_bins * spec_time)
         self.embed_data = nn.Conv2d(in_channels, in_channels, kernel_size=1)
 
-        
-        # if hidden_dims is None:
-        #     hidden_dims = [32, 64, 128, 256, 512]
-
         encoder_modules = []
 
         in_channels += 1 # To account for the extra label channel to add conditioning
@@ -45,8 +40,8 @@ class Encoder(nn.Module):
         
         #Encoder unpacking, mu and var declaration
         self.encoder = nn.Sequential(*encoder_modules)
-        self.fc_mu = nn.Linear(hidden_dims[-1]*19*8, latent_dim) # < depends on downsampling
-        self.fc_var = nn.Linear(hidden_dims[-1]*19*8, latent_dim)
+        self.fc_mu = nn.Linear(hidden_dims[-1]*24*10, latent_dim) # < depends on downsampling
+        self.fc_var = nn.Linear(hidden_dims[-1]*24*10, latent_dim)
 
     def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:
         std = torch.exp(0.5 * logvar)
@@ -54,11 +49,11 @@ class Encoder(nn.Module):
         return eps * std + mu
     
     def encode(self, input: Tensor) -> List[Tensor]:
-        print(f"input: {input.shape}")
+
         result = self.encoder(input)
-        print(f"result: {result.shape}")
+        print(result.shape)
         result = torch.flatten(result, start_dim=1)
-        print(f"result: {result.shape}")
+
         # Split the result into mu and var components
         # of the latent Gaussian distribution
         mu = self.fc_mu(result)
@@ -70,16 +65,14 @@ class Encoder(nn.Module):
         y = F.one_hot(batch[1].long(), self.num_classes).float()
         embedded_class = self.embed_class(y)
         embedded_class = embedded_class.view(-1,  self.spec_time, self.spec_bins).unsqueeze(1) # check wheter to swap time and bins
-        
-        print(embedded_class.shape)
+        print(batch[0].shape)
         embedded_input = self.embed_data(batch[0])
 
-        print(embedded_input.shape)
         x = torch.cat([embedded_input, embedded_class], dim = 1)
         mu, log_var = self.encode(x)
 
         z = self.reparameterize(mu, log_var)
-        
+
         return [z, y, mu, log_var]
 
 
@@ -88,13 +81,13 @@ class Decoder(nn.Module):
                  num_classes,
                  latent_dim,
                  hidden_dims: List = None) ->None:
-        
+        super(Decoder, self).__init__()
         modules = []
 
-        self.decoder_input = nn.Linear(latent_dim + num_classes, hidden_dims[-1] * 4)
+        self.decoder_input = nn.Linear(latent_dim + num_classes, hidden_dims[-1]*24*10) #hardcoded
 
         hidden_dims.reverse()
-
+        self.hidden_dims = hidden_dims
         for i in range(len(hidden_dims) - 1):
             modules.append(
                 nn.Sequential(
@@ -113,16 +106,15 @@ class Decoder(nn.Module):
         self.final_layer = nn.Sequential(
                             nn.ConvTranspose2d(hidden_dims[-1],
                                                hidden_dims[-1],
-                                               kernel_size=3,
+                                               kernel_size=(1,3),
                                                stride=2,
-                                               padding=1,
+                                               padding=(2,1),
                                                output_padding=1),
                             nn.BatchNorm2d(hidden_dims[-1]),
                             nn.LeakyReLU())
 
-        self.head = nn.Sequential(
-                                    nn.Conv2d(hidden_dims[-1], 
-                                              out_channels= 3,
+        self.head = nn.Sequential(nn.Conv2d(hidden_dims[-1], 
+                                              out_channels= 1,
                                               kernel_size= 3, 
                                               padding= 1),
                                     nn.Tanh())
@@ -132,11 +124,13 @@ class Decoder(nn.Module):
         self.decoder = nn.Sequential(*modules)
         
     def decode(self, z: Tensor) -> Tensor:
-        
         result = self.decoder_input(z)
-        result = result.view(-1, 512, 2, 2)
+        print(result.shape)
+        result = result.view(-1, self.hidden_dims[0], 24, 10) #hardcoded 19 x 8
         result = self.decoder(result)
+        print(result.shape)
         result = self.final_layer(result)
+        print(result.shape)
         result = self.head(result)
         return result
     

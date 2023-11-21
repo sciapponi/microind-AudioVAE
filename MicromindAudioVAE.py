@@ -9,15 +9,15 @@ class AudioVAE(MicroMind):
         super().__init__(*args, **kwargs)
 
 
-        # Extractor parameters
+        #hifigan extractor parameters
         scale = 1
-        sample_rate = int(48000 * scale)
-        hop_size = int(320 * scale)
-        mel_bins = 64
+        sample_rate = int(44100 * scale)
+        n_fft = 1024
+        hop_size = int(256 * scale)
+        mel_bins = 80
         window_size = int(1024 * scale)
-        fmin = 50
-        fmax = 14000
-
+        fmin = 0
+        fmax = 8000
         window = 'hann'
         center = True
         pad_mode = 'reflect'
@@ -37,36 +37,37 @@ class AudioVAE(MicroMind):
         
         # add Encoder to modules
         self.modules["encoder"] = Encoder(num_classes=10, 
-                                            latent_dim=128,
+                                            latent_dim=32,
                                             hidden_dims=[32, 64, 128],
-                                            spec_time=150,
-                                            spec_bins=64)
+                                            spec_time=188,
+                                            spec_bins=80)
         # add Decoder to Modules
         self.modules["decoder"] = Decoder(num_classes=10,
-                                          latent_dim=128,
-                                          hidden_dims=[32, 64, 128])
+                                            latent_dim=32,
+                                            hidden_dims=[32, 64, 128])
         
         def forward(self, batch):
             # RESIZE IMAGES (COuld use collate_fn)
             x = self.modules["spectrogram_extractor"](batch[0])
             x = self.modeules["logmel_extractor"](x)
             z, y, mu, log_var = self.modules["encoder"](x)
+            x = decoder(z,y)
             return x
         
 
         
 
 if __name__=="__main__":
+
+    #hifigan
     scale = 1
     sample_rate = int(44100 * scale)
-    n_fft = 1028
-    hop_size = int(320 * scale)
-    mel_bins = 64
+    n_fft = 1024
+    hop_size = int(256 * scale)
+    mel_bins = 80
     window_size = int(1024 * scale)
-    fmin = 50
-    fmax = 14000
-    duration = 5
-    crop_len = 5 * sample_rate
+    fmin = 0
+    fmax = 8000
     window = 'hann'
     center = True
     pad_mode = 'reflect'
@@ -76,8 +77,7 @@ if __name__=="__main__":
     
     base_path = '/home/ste/Code/python/micromind-warmup-task/task_2/AudioMNIST/data'
     
-    dataset = AudioMNIST(base_path)
-
+    dataset = AudioMNIST(base_path, resample_rate=sample_rate)
     waveform, sr, label, speaker = dataset[0]
 
     spec_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
@@ -91,20 +91,26 @@ if __name__=="__main__":
     
     dataloader = DataLoader(dataset, batch_size=2)
 
-    for batch in dataloader:
-        print(batch[0].squeeze().shape) # removes all axis with dim=1 (removes channels)
-        spec = spec_extractor(batch[0].squeeze())
-        print(spec.shape)
-        batch[0] = logmel_extractor(spec)
-        print(batch[0].shape)
-        encoder = Encoder(num_classes=10, 
+    encoder = Encoder(num_classes=10, 
                         latent_dim=32,
                         hidden_dims=[32, 64, 128],
-                        spec_time=150,
-                        spec_bins=64)
+                        spec_time=188,
+                        spec_bins=80)
+    decoder = Decoder(num_classes=10,
+                    latent_dim=32,
+                    hidden_dims=[32, 64, 128])
+    
+    for batch in dataloader:
+ 
+        spec = spec_extractor(batch[0].squeeze()) # removes all axis with dim=1 (removes channels)
+
+        batch[0] = logmel_extractor(spec)
+
+        print(batch[0].shape)
         
         
-        
-        print(encoder(batch))
+        z, y, mu, log_var = encoder(batch)
+
+        print(decoder(z,y).shape)
         exit()
     

@@ -10,8 +10,9 @@ import torch
 
 class AudioMNIST(Dataset):
 
-    def __init__(self, data_path, max_len_audio:int = 47998):
+    def __init__(self, data_path, max_len_audio:int = 47998, resample_rate=None):
 
+        
         self.max_len_audio = max_len_audio
         self.data_path = os.path.expanduser(data_path)
 
@@ -25,10 +26,22 @@ class AudioMNIST(Dataset):
                 if file.endswith('.wav'):
                     self.wav_file_paths.append(os.path.join(root, file))
         
-    # to implement -> should be done before reading files
-    def remove_long_samples(max_length):
-        pass
-
+        #get original sample rate
+        if resample_rate is not None:
+            waveform, sample_rate = torchaudio.load(self.wav_file_paths[0])
+            self.resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
+        else:
+            self.resampler = None
+    
+    def resample_all(self, resample_rate):
+        #get original sample rate
+        waveform, sample_rate = torchaudio.load(self.wav_file_paths[0])
+        resampler = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=waveform.dtype)
+        for wav_path in self.wav_file_paths:
+            waveform, sample_rate = torchaudio.load(wav_path)
+            resampled_waveform = resampler(waveform)
+            torchaudio.save(wav_path, resampled_waveform, resample_rate)
+        
     def __len__(self):
         return len(self.wav_file_paths)
 
@@ -44,6 +57,7 @@ class AudioMNIST(Dataset):
 
         zeros = self.max_len_audio - waveform.shape[1]
         waveform = F.pad(waveform, (0, zeros))
+        waveform = self.resampler(waveform)
         return waveform, int(label), sr, speaker
 
     def get_speaker_metadata(self, speaker):
