@@ -1,2 +1,5 @@
 AudioMNIST
 __pycache__
+results
+plots
+wavs

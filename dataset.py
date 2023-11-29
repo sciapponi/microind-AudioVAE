@@ -24,6 +24,11 @@ class AudioMNIST(Dataset):
         for root, _, files in os.walk(self.data_path):
             for file in files:
                 if file.endswith('.wav'):
+                    # wav_file_name = file.split('/')[-1]
+                    # # extract label and speaker
+                    # split_wav_name = wav_file_name.split('_')
+                    # label, speaker = split_wav_name[0], split_wav_name[1]
+                    # if label in ["0", "1"]:
                     self.wav_file_paths.append(os.path.join(root, file))
         
         #get original sample rate
@@ -45,20 +50,39 @@ class AudioMNIST(Dataset):
     def __len__(self):
         return len(self.wav_file_paths)
 
+    def normalize(self, waveform):
+        min_value = torch.min(waveform)
+        max_value = torch.max(waveform)
+        normalized_waveform = (waveform - min_value) / (max_value - min_value)
+        scaled_waveform = 2 * normalized_waveform - 1
+
+        return scaled_waveform
+        # return normalized_waveform
+
+
     def __getitem__(self, index)-> any:
         wav_path=self.wav_file_paths[index]
         # loead wav
-        waveform, sample_rate = torchaudio.load(wav_path)
+        waveform, sample_rate = torchaudio.load(wav_path, normalize=True)
+        waveform = F.normalize(waveform)
         sr = sample_rate
         wav_file_name = wav_path.split('/')[-1]
         # extract label and speaker
         split_wav_name = wav_file_name.split('_')
         label, speaker = split_wav_name[0], split_wav_name[1]
 
-        zeros = self.max_len_audio - waveform.shape[1]
-        waveform = F.pad(waveform, (0, zeros))
+        
         waveform = self.resampler(waveform)
-        return waveform, int(label), sr, speaker
+        original_length = waveform.shape[1]
+        ones_mask = torch.ones(original_length)
+
+        zeros = self.max_len_audio - waveform.shape[1]
+        waveform = self.normalize(waveform) #normalize and scale
+
+        waveform = F.pad(waveform, (0, zeros))
+        length_mask = F.pad(ones_mask,(0,zeros)).unsqueeze(0)
+        # print(length_mask.unsqueeze(0))
+        return waveform, int(label), length_mask #, sr, speaker
 
     def get_speaker_metadata(self, speaker):
         return self.meta_dict[speaker]
@@ -69,15 +93,17 @@ if __name__=="__main__":
     lengths = []
     srs = []
     
-    dataset = AudioMNIST(base_path, 16000)
+    dataset = AudioMNIST(base_path, resample_rate=22050, max_len_audio=22050)
     dataset[0]
-    for waveform, sr, label, speaker in dataset:
+    for waveform, label, original_length in dataset:
+        print(original_length)
+        # print(waveform.max(), waveform.min())
         lengths.append(waveform.shape[1])
-        srs.append(sr)
+        # srs.append(sr)
     # print(waveform)
     # print(dataset.get_speaker_metadata(speaker))
 
-    print(set(srs))
+    # print(set(srs))
     print(f'total {len(set(lengths))}')
     print(f"Max: {max(lengths)}")
     print(f"Min: {min(lengths)}")
