@@ -166,10 +166,10 @@ class WaveformResConvBlock(nn.Module):
     def __init__(self, channels, kernels):
         super(WaveformResConvBlock, self).__init__()
         self.blocks1 = nn.ModuleList(
-            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1)) for kernel_size in kernels]
+            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
         )
         self.blocks2 = nn.ModuleList(
-            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1)) for kernel_size in kernels]
+            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
         )
     def forward(self, x):
         for block1, block2 in zip(self.blocks1, self.blocks2):
