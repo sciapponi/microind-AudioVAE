@@ -123,7 +123,7 @@ class AudioVAE(MicroMind):
     def configure_optimizers(self):
         """Configures the optimizes and, eventually the learning rate scheduler."""
         
-        opt = torch.optim.Adam(self.modules.parameters(), lr=0.0000001, weight_decay=0.0005)
+        opt = torch.optim.Adam(self.modules.parameters(), lr=0.001, weight_decay=0.0005)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=32900)
         # lr_scheduler = None
         return opt, lr_scheduler
