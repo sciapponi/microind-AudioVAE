@@ -161,6 +161,26 @@ class SpecDecoder(nn.Module):
         return result
 
 
+
+class WaveformResConvBlock(nn.Module):
+    def __init__(self, channels, kernels):
+        super(WaveformConvBlock, self).__init__()
+        self.blocks1 = nn.ModuleList(
+            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1)) for kernel_size in kernels]
+        )
+        self.blocks2 = nn.ModuleList(
+            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1)) for kernel_size in kernels]
+        )
+    def forward(self, x):
+        for block1, block2 in zip(self.blocks1, self.blocks2):
+            x_ = F.leaky_relu(x, 0.1)
+            x_ = block1(x_)
+            x_ = F.leaky_relu(x_, 0.1)
+            x_ = block2(x_)
+            x =  x + x_
+
+        return x
+    
 class WaveformConvBlock(nn.Module):
     def __init__(self, channels, kernels):
         super(WaveformConvBlock, self).__init__()
@@ -183,10 +203,10 @@ class WaveformDecoder(nn.Module):
                 #  upsample_rates = [16,16,4,4, 2],
                 #  latent_dim = 32,
                 #  conv_kernel_sizes = [3, 3, 3, 7, 11]):
-                upsample_kernel_sizes= [3,3],
-                 upsample_rates = [32,32],
+                upsample_kernel_sizes= [3,5, 7],
+                 upsample_rates = [16,16, 16],
                  latent_dim = 32,
-                 conv_kernel_sizes = [3, 3, 3]):
+                 conv_kernel_sizes = [3, 5, 7]):
 
         # Takes a generated latent representation of a spectrogram as an input (sampled from VAE latent space) 
         # Outputs waveform
@@ -210,7 +230,8 @@ class WaveformDecoder(nn.Module):
             out_channels = channels_now // 2
             ## just added weight norm
             self.ups += [weight_norm(nn.ConvTranspose1d(channels_now, out_channels, kernel_size=upsample_kernel_sizes[i], stride=upsample_rates[i], padding=0))] 
-            self.convs += [WaveformConvBlock(out_channels, conv_kernel_sizes)]
+            # self.convs += [WaveformConvBlock(out_channels, conv_kernel_sizes)]
+            self.convs += [WaveformResConvBlock(out_channels, conv_kernel_sizes)]
             channels_now = out_channels
 
         self.last = nn.Conv1d(channels_now, 1, kernel_size=3, stride=1, padding=0)
