@@ -40,7 +40,7 @@ class AudioVAE(MicroMind):
         amin = 1e-10
         top_db = None
 
-        # Spectrogram extractor
+        # Spectrogram extractor default nfft 2048
         self.modules["spectrogram_extractor"] = Spectrogram(n_fft=window_size, hop_length=hop_size, 
             win_length=window_size, window=window, center=center, pad_mode=pad_mode,
                         freeze_parameters=True)
@@ -112,11 +112,15 @@ class AudioVAE(MicroMind):
         print("i>",input[0])
         # print("Pred ",recons[0])
         # print("original ", input[0])
-        # waveform_loss = F.l1_loss(recons, input)
-        recons = self.modules["logmel_extractor"](self.modules["spectrogram_extractor"](recons.squeeze()))
-        input = self.modules["logmel_extractor"](self.modules["spectrogram_extractor"](input.squeeze()))
-        spec_loss = F.l1_loss(recons, input)
-        return spec_loss
+        # waveform_loss = F.mse_loss(recons, input)
+        recons_spec = self.modules["spectrogram_extractor"](recons.squeeze())
+        input_spec = self.modules["spectrogram_extractor"](input.squeeze())
+        recons = self.modules["logmel_extractor"](recons_spec)
+        input = self.modules["logmel_extractor"](input_spec)
+
+        spec_loss_sm = F.l1_loss(recons, input)
+        spec_loss_sc = torch.norm(torch.abs(input_spec)- torch.abs(recons_spec)) / torch.norm(torch.abs(input_spec))
+        return spec_loss_sc + spec_loss_sm
         # return F.l1_loss(recons,input)
         # return waveform_loss
     
@@ -183,7 +187,7 @@ if __name__=="__main__":
     kld_loss_metric = Metric(name="kld_loss", fn=m.kld_loss)
     recons_loss_metric = Metric(name="recons_loss", fn=m.recons_loss)
 
-    m.train(epochs=100,
+    m.train(epochs=20,
             checkpointer=checkpointer,
             datasets={"train": train_dataloader, "val": test_dataloader, "test": test_dataloader},)
             # datasets={"train": train_dataloader, "val": train_dataloader, "test": train_dataloader},)
