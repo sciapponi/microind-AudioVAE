@@ -165,6 +165,7 @@ class SpecDecoder(nn.Module):
 class WaveformResConvBlock(nn.Module):
     def __init__(self, channels, kernels):
         super(WaveformResConvBlock, self).__init__()
+        self.batch_norm = nn.BatchNorm1d(channels)
         self.blocks1 = nn.ModuleList(
             [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
         )
@@ -172,7 +173,9 @@ class WaveformResConvBlock(nn.Module):
             [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
         )
     def forward(self, x):
-        for block1, block2 in zip(self.blocks1, self.blocks2):
+        x = self.batch_norm(x)
+        for block1, block2 in zip( self.blocks1, self.blocks2):
+            
             x_ = F.leaky_relu(x, 0.1)
             x_ = block1(x_)
             x_ = F.leaky_relu(x_, 0.1)
@@ -206,7 +209,7 @@ class WaveformDecoder(nn.Module):
                 upsample_kernel_sizes= [3,5, 7],
                  upsample_rates = [16,16, 16],
                  latent_dim = 32,
-                 conv_kernel_sizes = [3, 5, 7]):
+                 conv_kernel_sizes = [3, 5, 7, 11]):
 
         # Takes a generated latent representation of a spectrogram as an input (sampled from VAE latent space) 
         # Outputs waveform
@@ -254,8 +257,8 @@ class WaveformDecoder(nn.Module):
         print("last", x[0][0])
         x = self.last_upsampling(x)
         print('fixing size', x[0][0])
-        x = torch.tanh(x)
-        # x = torch.sigmoid(x)
+        # x = torch.tanh(x)
+        x = torch.sigmoid(x)
         return x
     
     def forward(self, z, y):

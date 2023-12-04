@@ -54,10 +54,10 @@ class AudioMNIST(Dataset):
         min_value = torch.min(waveform)
         max_value = torch.max(waveform)
         normalized_waveform = (waveform - min_value) / (max_value - min_value)
-        scaled_waveform = 2 * normalized_waveform - 1
+        # scaled_waveform = 2 * normalized_waveform - 1
 
-        return scaled_waveform
-        # return normalized_waveform
+        # return scaled_waveform
+        return normalized_waveform
 
 
     def __getitem__(self, index)-> any:

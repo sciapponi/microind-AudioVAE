@@ -1,7 +1,7 @@
 from micromind import MicroMind, Metric
 from micromind.utils import parse_configuration
 import micromind as mm
-from torchlibrosa.stft import Spectrogram, LogmelFilterBank
+from torchlibrosa.stft import Spectrogram, LogmelFilterBank, STFT
 from torchinfo import summary
 from AudioVAE import Encoder, SpecDecoder, WaveformDecoder
 from dataset import AudioMNIST
@@ -40,7 +40,15 @@ class AudioVAE(MicroMind):
         amin = 1e-10
         top_db = None
 
-        # Spectrogram extractor default nfft 2048
+
+        self.modules["STFT"] = STFT(n_fft=window_size, 
+                                    hop_length=hop_size,
+                                    win_length=window_size,
+                                    center=center,
+                                    pad_mode=pad_mode,
+                                    freeze_parameters=True)
+
+        # Spectrogram extractor default nfft 1024
         self.modules["spectrogram_extractor"] = Spectrogram(n_fft=window_size, hop_length=hop_size, 
             win_length=window_size, window=window, center=center, pad_mode=pad_mode,
                         freeze_parameters=True)
@@ -113,22 +121,26 @@ class AudioVAE(MicroMind):
         # print("Pred ",recons[0])
         # print("original ", input[0])
         # waveform_loss = F.mse_loss(recons, input)
+        recons_imag = self.modules["STFT"](recons.squeeze())[1]
+        input_imag = self.modules["STFT"](input.squeeze())[1]
         recons_spec = self.modules["spectrogram_extractor"](recons.squeeze())
         input_spec = self.modules["spectrogram_extractor"](input.squeeze())
-        recons = self.modules["logmel_extractor"](recons_spec)
-        input = self.modules["logmel_extractor"](input_spec)
+        recons_mel = self.modules["logmel_extractor"](recons_spec)
+        input_mel = self.modules["logmel_extractor"](input_spec)
 
-        spec_loss_sm = F.l1_loss(recons, input)
-        spec_loss_sc = torch.norm(torch.abs(input_spec)- torch.abs(recons_spec)) / torch.norm(torch.abs(input_spec))
-        return spec_loss_sc + spec_loss_sm
+        spec_loss_sm = F.l1_loss(recons_mel, input_mel) # spectral magnitude
+        spec_loss_sc = torch.norm(torch.abs(input_spec) - torch.abs(recons_spec)) / torch.norm(torch.abs(input_spec)) # spectral cnvergence
+        phase_loss = F.l1_loss(recons_imag, input_imag) # L1 loss on imaginary part
+        return spec_loss_sc + spec_loss_sm + phase_loss
         # return F.l1_loss(recons,input)
         # return waveform_loss
     
     def configure_optimizers(self):
         """Configures the optimizes and, eventually the learning rate scheduler."""
         
-        opt = torch.optim.Adam(self.modules.parameters(), lr=0.001, weight_decay=0.0005)
+        opt = torch.optim.Adam(self.modules.parameters(), lr=0.0002, weight_decay=0.0005)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=32900)
+        # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=0.999, last_epoch=13160, initial_lr=0.0002, verbose = True)
         # lr_scheduler = None
         return opt, lr_scheduler
     
@@ -187,7 +199,7 @@ if __name__=="__main__":
     kld_loss_metric = Metric(name="kld_loss", fn=m.kld_loss)
     recons_loss_metric = Metric(name="recons_loss", fn=m.recons_loss)
 
-    m.train(epochs=20,
+    m.train(epochs=100,
             checkpointer=checkpointer,
             datasets={"train": train_dataloader, "val": test_dataloader, "test": test_dataloader},)
             # datasets={"train": train_dataloader, "val": train_dataloader, "test": train_dataloader},)
