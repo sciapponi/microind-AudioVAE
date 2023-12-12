@@ -5,6 +5,34 @@ import torch.nn.functional as F
 from typing import *
 from torch.nn.utils.parametrizations import weight_norm
 
+# 3x3 convolution
+def conv3x3(in_channels, out_channels, stride=1):
+    return nn.Conv2d(in_channels, out_channels, kernel_size=3, 
+                     stride=stride, padding=1, bias=False)
+                     
+class EncoderResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+        super(EncoderResBlock, self).__init__()
+        self.conv1 = conv3x3(in_channels, out_channels, stride)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(out_channels, out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.downsample = downsample
+        
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        out += residual
+        out = self.relu(out)
+        return out
+    
 class Encoder(nn.Module):
     def __init__(self,
                  num_classes,
@@ -36,7 +64,8 @@ class Encoder(nn.Module):
                     weight_norm(nn.Conv2d(in_channels, out_channels=h_dim,
                               kernel_size= 3, stride= 2, padding  = 1)),
                     nn.BatchNorm2d(h_dim),
-                    nn.LeakyReLU())
+                    nn.LeakyReLU(),
+                    EncoderResBlock(h_dim, h_dim))
             )
             in_channels = h_dim
         

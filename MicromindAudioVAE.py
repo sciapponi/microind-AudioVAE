@@ -156,6 +156,7 @@ class AudioVAE(MicroMind):
         kld_weight = 0.1
         r_loss = self.recons_loss(pred, batch)
         # print(f"rloss:", r_loss.shape)
+        
         k_loss = self.kld_loss(pred, None)
         # print(r_loss, k_loss)
         # print(f"kloss:", k_loss.shape)
