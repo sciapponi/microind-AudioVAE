@@ -5,6 +5,7 @@ from torchlibrosa.stft import Spectrogram, LogmelFilterBank, STFT
 from torchinfo import summary
 from AudioVAE import Encoder, SpecDecoder, WaveformDecoder
 from dataset import AudioMNIST
+from losses import MultiResolutionSpecLoss
 import torchaudio
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
@@ -78,6 +79,8 @@ class AudioVAE(MicroMind):
                                                     spec_bins=6
                                                     )
         
+        self.modules["loss"] = MultiResolutionSpecLoss()
+        
         tot_params = 0
         for m in self.modules.values():
             temp = summary(m, verbose=0)
@@ -90,14 +93,15 @@ class AudioVAE(MicroMind):
         # RESIZE IMAGES (COuld use collate_fn
         waveform = batch[0]
         x = self.modules["spectrogram_extractor"](batch[0].squeeze())
-
+        
         input_mel_spec = self.modules["logmel_extractor"](x)
         x = input_mel_spec.transpose(1, 3)
         x = self.modules['bn0'](x)
         x = x.transpose(1, 3)
-
+        
         # x = self.modules['bn0'](input_mel_spec)
         z, y, mu, log_var = self.modules["encoder"](x, batch[1])
+
         print("z",z[0][0])
         x = self.modules["decoder"](z,y)
 
@@ -110,30 +114,33 @@ class AudioVAE(MicroMind):
         return torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1))
     
     def recons_loss(self, pred, batch):
-        length_mask = batch[2]
-        # print("p",pred[0][0])
-        print(pred[0].shape)
-        print(pred[0][0].mean())
-        recons = pred[0]*length_mask # spec artifact removal
-        print("r>",recons[0])
-        input = pred[1]*length_mask
-        print("i>",input[0])
-        # print("Pred ",recons[0])
-        # print("original ", input[0])
-        # waveform_loss = F.mse_loss(recons, input)
-        recons_imag = self.modules["STFT"](recons.squeeze())[1]
-        input_imag = self.modules["STFT"](input.squeeze())[1]
-        recons_spec = self.modules["spectrogram_extractor"](recons.squeeze())
-        input_spec = self.modules["spectrogram_extractor"](input.squeeze())
-        recons_mel = self.modules["logmel_extractor"](recons_spec)
-        input_mel = self.modules["logmel_extractor"](input_spec)
+        # length_mask = batch[2]
+        # # print("p",pred[0][0])
+        # print(pred[0].shape)
+        # print(pred[0][0].mean())
+        # recons = pred[0]*length_mask # spec artifact removal
+        # print("r>",recons[0])
+        # input = pred[1]*length_mask
+        # print("i>",input[0])
+        # # print("Pred ",recons[0])
+        # # print("original ", input[0])
+        # # waveform_loss = F.mse_loss(recons, input)
+        # recons_imag = self.modules["STFT"](recons.squeeze())[1]
+        # input_imag = self.modules["STFT"](input.squeeze())[1]
+        # recons_spec = self.modules["spectrogram_extractor"](recons.squeeze())
+        # input_spec = self.modules["spectrogram_extractor"](input.squeeze())
+        # recons_mel = self.modules["logmel_extractor"](recons_spec)
+        # input_mel = self.modules["logmel_extractor"](input_spec)
 
-        spec_loss_sm = F.l1_loss(recons_mel, input_mel) # spectral magnitude
-        spec_loss_sc = torch.norm(torch.abs(input_spec) - torch.abs(recons_spec)) / torch.norm(torch.abs(input_spec)) # spectral cnvergence
-        phase_loss = F.l1_loss(recons_imag, input_imag) # L1 loss on imaginary part
-        return spec_loss_sc + spec_loss_sm + phase_loss
+        # spec_loss_sm = F.l1_loss(recons_mel, input_mel) # spectral magnitude
+        # spec_loss_sc = torch.norm(torch.abs(input_spec) - torch.abs(recons_spec)) / torch.norm(torch.abs(input_spec)) # spectral cnvergence
+        # phase_loss = F.l1_loss(recons_imag, input_imag) # L1 loss on imaginary part
+        # return spec_loss_sc + spec_loss_sm + phase_loss
         # return F.l1_loss(recons,input)
         # return waveform_loss
+
+
+        return self.modules["loss"](pred, batch)
     
     def configure_optimizers(self):
         """Configures the optimizes and, eventually the learning rate scheduler."""
@@ -205,7 +212,6 @@ if __name__=="__main__":
             # datasets={"train": train_dataloader, "val": train_dataloader, "test": train_dataloader},)
             # metrics=[kld_loss_metric, recons_loss_metric])
     # m.test(
-    #     datasets={"test":test_dataloader}
     # )
     # exit()
 

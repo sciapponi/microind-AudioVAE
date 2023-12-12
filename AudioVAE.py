@@ -209,7 +209,7 @@ class WaveformDecoder(nn.Module):
                 upsample_kernel_sizes= [3,5, 7],
                  upsample_rates = [16,16, 16],
                  latent_dim = 32,
-                 conv_kernel_sizes = [3, 5, 7, 11]):
+                 conv_kernel_sizes = [3, 5, 7]):
 
         # Takes a generated latent representation of a spectrogram as an input (sampled from VAE latent space) 
         # Outputs waveform
