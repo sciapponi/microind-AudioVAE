@@ -79,7 +79,9 @@ class AudioVAE(MicroMind):
                                                     spec_bins=6
                                                     )
         
-        self.modules["loss"] = MultiResolutionSpecLoss()
+        loss = MultiResolutionSpecLoss()
+
+        self.loss = loss.to(self.device)
         
         tot_params = 0
         for m in self.modules.values():
@@ -102,7 +104,7 @@ class AudioVAE(MicroMind):
         # x = self.modules['bn0'](input_mel_spec)
         z, y, mu, log_var = self.modules["encoder"](x, batch[1])
 
-        print("z",z[0][0])
+        # print("z",z[0][0])?
         x = self.modules["decoder"](z,y)
 
         return [x, waveform, mu, log_var]
@@ -139,13 +141,30 @@ class AudioVAE(MicroMind):
         # return F.l1_loss(recons,input)
         # return waveform_loss
 
+        # print(pred[0][0])
+        # print("\n\n\n ENCODER \n\n\n")
+        # # for name, param in self.modules['encoder'].named_parameters():
+        # #     print(name, param)
+        # for param in self.modules['decoder'].parameters():
+        #     print(param.grad)
 
-        return self.modules["loss"](pred, batch)
+        # print("\n\n\n DECODER \n\n\n")
+        # # for name, param in self.modules['decoder'].named_parameters():
+        # #     print(name, param)
+        # for param in self.modules['decoder'].parameters():
+        #     print(param.grad)
+
+        # print(self.modules['encoder'].named_parameters)
+        # exit()
+        if torch.isnan(pred[0][0]).any():
+            print("\n\n\n FOUND NONE! \n\n\n")
+            exit()
+        return self.loss(pred, batch)
     
     def configure_optimizers(self):
         """Configures the optimizes and, eventually the learning rate scheduler."""
         
-        opt = torch.optim.Adam(self.modules.parameters(), lr=0.0002, weight_decay=0.0005)
+        opt = torch.optim.Adam(self.modules.parameters(), lr=0.002, weight_decay=0.0005)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=32900)
         # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(opt, gamma=0.999, last_epoch=13160, initial_lr=0.0002, verbose = True)
         # lr_scheduler = None
@@ -156,7 +175,7 @@ class AudioVAE(MicroMind):
         kld_weight = 0.1
         r_loss = self.recons_loss(pred, batch)
         # print(f"rloss:", r_loss.shape)
-        
+
         k_loss = self.kld_loss(pred, None)
         # print(r_loss, k_loss)
         # print(f"kloss:", k_loss.shape)
@@ -207,7 +226,7 @@ if __name__=="__main__":
     kld_loss_metric = Metric(name="kld_loss", fn=m.kld_loss)
     recons_loss_metric = Metric(name="recons_loss", fn=m.recons_loss)
 
-    m.train(epochs=100,
+    m.train(epochs=200,
             checkpointer=checkpointer,
             datasets={"train": train_dataloader, "val": test_dataloader, "test": test_dataloader},)
             # datasets={"train": train_dataloader, "val": train_dataloader, "test": train_dataloader},)

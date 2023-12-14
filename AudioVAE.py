@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 from typing import *
-from torch.nn.utils.parametrizations import weight_norm
+
 
 # 3x3 convolution
 def conv3x3(in_channels, out_channels, stride=1):
@@ -29,6 +29,8 @@ class EncoderResBlock(nn.Module):
         out = self.bn2(out)
         if self.downsample:
             residual = self.downsample(x)
+        # print(out.shape)
+        # print(residual.shape)
         out += residual
         out = self.relu(out)
         return out
@@ -61,8 +63,7 @@ class Encoder(nn.Module):
         for h_dim in hidden_dims:
             encoder_modules.append(
                 nn.Sequential(
-                    weight_norm(nn.Conv2d(in_channels, out_channels=h_dim,
-                              kernel_size= 3, stride= 2, padding  = 1)),
+                    nn.Conv2d(in_channels, out_channels=h_dim, kernel_size= 3, stride= 2, padding  = 1),
                     nn.BatchNorm2d(h_dim),
                     nn.LeakyReLU(),
                     EncoderResBlock(h_dim, h_dim))
@@ -196,10 +197,10 @@ class WaveformResConvBlock(nn.Module):
         super(WaveformResConvBlock, self).__init__()
         self.batch_norm = nn.BatchNorm1d(channels)
         self.blocks1 = nn.ModuleList(
-            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
+            [nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1) for kernel_size in kernels]
         )
         self.blocks2 = nn.ModuleList(
-            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1)) for kernel_size in kernels]
+            [nn.Conv1d(channels, channels, kernel_size, stride=1, padding=int(kernel_size/2), dilation=1) for kernel_size in kernels]
         )
     def forward(self, x):
         x = self.batch_norm(x)
@@ -217,7 +218,7 @@ class WaveformConvBlock(nn.Module):
     def __init__(self, channels, kernels):
         super(WaveformConvBlock, self).__init__()
         self.blocks = nn.ModuleList(
-            [weight_norm(nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1)) for kernel_size in kernels]
+            [nn.Conv1d(channels, channels, kernel_size, stride=1, padding=0, dilation=1) for kernel_size in kernels]
         )
     def forward(self, x):
         for resblock in self.blocks:
@@ -261,7 +262,7 @@ class WaveformDecoder(nn.Module):
         for i in range(len(upsample_kernel_sizes)):
             out_channels = channels_now // 2
             ## just added weight norm
-            self.ups += [weight_norm(nn.ConvTranspose1d(channels_now, out_channels, kernel_size=upsample_kernel_sizes[i], stride=upsample_rates[i], padding=0))] 
+            self.ups += [nn.ConvTranspose1d(channels_now, out_channels, kernel_size=upsample_kernel_sizes[i], stride=upsample_rates[i], padding=0)] 
             # self.convs += [WaveformConvBlock(out_channels, conv_kernel_sizes)]
             self.convs += [WaveformResConvBlock(out_channels, conv_kernel_sizes)]
             channels_now = out_channels
@@ -279,13 +280,13 @@ class WaveformDecoder(nn.Module):
             x = up(x)
 
             x = conv(x)
-        print("before lastblock",x[0][0])
+        # print("before lastblock",x[0][0])
         x = F.leaky_relu(x, 0.1)
 
         x = self.last(x)
-        print("last", x[0][0])
+        # print("last", x[0][0])
         x = self.last_upsampling(x)
-        print('fixing size', x[0][0])
+        # print('fixing size', x[0][0])
         # x = torch.tanh(x)
         x = torch.sigmoid(x)
         return x

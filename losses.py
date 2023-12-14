@@ -108,21 +108,6 @@ class MultiResolutionSpecLoss(nn.Module):
         self.spec_extractors = nn.ModuleList(self.spec_extractors)
         self.logmel_extractors = nn.ModuleList(self.logmel_extractors)
 
-    def unwrap(self, phi, dim=-1):
-        # Ensure dimension is correct
-        # assert dim == -1, 'unwrap only supports dim=-1 for now'
-        print("phi: ", phi.shape)
-        # assert dim is -1, ‘unwrap only supports dim=-1 for now’
-        dphi = torch.diff(phi, dim=-1)
-        dphi_m = ((dphi+np.pi) % (2 * np.pi)) - np.pi
-        print("dphi", dphi.shape)
-        dphi_m[(dphi_m==-np.pi)&(dphi>0)] = np.pi
-        print("dphi m", dphi_m.shape)
-        phi_adj = dphi_m-dphi
-        phi_adj[dphi.abs()<np.pi] = 0
-        print("phiadj: ", phi_adj.shape)
-        print("cmsm", phi_adj.cumsum(dim).shape)
-        return phi + phi_adj.cumsum(dim)
     
     def phase_loss(self, x_phs, y_phs):
         # x_stft =  torch.cat(x_stft)
